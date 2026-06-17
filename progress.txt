@@ -1,0 +1,196 @@
+Platform Enablement Layer - Salesforce Integration & Reusable Components - Progress
+Generated: 2026-06-16 (project #2, built in the same spirit as projects/todo-app/)
+Plan: docs/IMPLEMENTATION_PLAN.md
+Thesis: todo-app was an APP TEAM; this is the PLATFORM TEAM that serves it.
+        The reusable layer is the product; the integration is the proof.
+JD focus: the two "Must have" lines todo-app left thin -
+          (1) Salesforce integration patterns  (2) reusable platform enablers / explicit APIs.
+Reuses: todo-app orgs (DevHub orgfarm-60a172912c / prod orgfarm-5b96907065), the Phase-9
+        reusable CI template, glab/auth + base64-secret + scratch-budget lessons.
+Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count before pushing.
+            Package-version builds are a SEPARATE 6/day limit. API pinned 67.0 (Summer '26).
+
+[x] 1.0 - Phase 1 - Governance and Platform Charter  *** PHASE 1 COMPLETE 2026-06-17 (back-filled after Phase 2) ***
+    [x] 1.1 - docs/governance/charter.md (platform-as-product; roles incl. Consumer App Lead + InfoSec)
+              2026-06-17 DONE. Reuses todo-app hats/SoD/ALM-stages; ADDS Consumer App Lead hat (signs off public-API
+              changes, veto on breaking w/o migration) + InfoSec hat (signs off trust boundary/auth/secrets). Decision-
+              authority table adds public-API-change + security-config rows. Maturity: Practicing -> Leading via reuse.
+    [x] 1.2 - docs/governance/api-governance.md (public-API definition, semver, DEPRECATION policy) <- the differentiator
+              2026-06-17 DONE. THE net-new doc (todo-app had no analogue). Defines public surface (in public-api-spec.md
+              or integration-contract.md = public; else internal/free-to-change); semver of the CONTRACT (additive=minor,
+              breaking=major); 4-step deprecation cycle (deprecate->warn->notify->remove, >=1 minor window); change
+              workflow needs Architect+Consumer-Lead sign-off + spec updated same MR. Constrains NFR-8.
+    [x] 1.3 - docs/governance/change-management.md (adds the breaking-API change class)
+              2026-06-17 DONE. Reuses todo-app classes + ADDS "Breaking API change" class (Architect+Consumer Lead+CCB,
+              must follow deprecation cycle). Additive-only now covers public-API too (NFR-11). Security/auth change needs
+              InfoSec sign-off. Sharper direct-prod-change warning: manual base change desyncs installed consumer.
+    [x] 1.4 - docs/governance/definition-of-done.md (adds public-API doc + consumer-impact)
+              2026-06-17 DONE. Extends todo-app DoD: no endpoint/secret in source; callouts async (no callout-after-DML);
+              HttpCalloutMock incl timeout/4xx/5xx/malformed; inbound idempotency proven; contract test vs deployed mock;
+              public-api-spec/integration-contract updated same MR; consumer-impact + deprecation-log; Consumer/InfoSec sign-offs.
+    [x] 1.5 - docs/decision-log/ADR-001-packaging-model.md (base + extension package vs monolith)
+              2026-06-17 DONE. Two-tier unlocked pkg (base <- todo-app consumer #1 + stub consumer #2), no namespace.
+              EXPLICITLY picks up todo-app ADR-003's deferred "split only with a real dependency motive (new ADR)" -
+              THIS is that motive. Dependency-ordered install; rollback rehearsed WITH consumer installed (Phase 8);
+              additive-only API/schema load-bearing for NFR-8/NFR-11. Supersedes ADR-003 deferral for platform context only.
+    NOTE: Phase 1 was back-filled AFTER Phase 2 (Andy directed requirements-first). All later phases that lean on
+    api-governance.md (NFR-8, RTM, change-mgmt breaking-API class) now have their dependency in place.
+[x] 2.0 - Phase 2 - Requirements (Platform Capabilities + Integration)  *** PHASE 2 COMPLETE 2026-06-17 ***
+    [x] 2.0a- docs/requirements/system-landscape.md (deck DISCOVERY: current-state inventory, SoR, pain points, integration decision framework applied)
+              2026-06-16 DONE. Grounded in 11 integration-deck topics + references.html (PDFs are image-only/no
+              extractable text -> applied deck TITLES + references framework, not slide quotes; noted in doc §10).
+              Classified 4 scenarios via the 6 canonical patterns: S1 SF->FRS RPI Fire-and-Forget (async, off-event
+              Queueable callout to dodge callout-after-DML); S2 FRS->SF Remote Call-In (idempotent); S3 reusable
+              logging = UI-Update-on-Data-Change (PE-backed, survives rollback); S4 Batch Data Sync = deferred fallback.
+              Auth matrix: outbound Named/External Credential (client-creds/API key); inbound Connected App + least-priv
+              integration user (JWT). Middleware seam documented at CalloutService (§7). Feeds 2.1/2.2/2.3 + ADR-002/005.
+    [x] 2.1 - docs/requirements/functional-requirements.md (Logger/EventPublisher/CalloutService APIs; outbound; inbound; resilience)
+              2026-06-16 DONE. 12 FRs w/ Given/When/Then, each traced to landscape scenarios S1-S3 + actor named
+              (consumer-dev / platform / external FRS). A=API (FR1-4), B=outbound F&F (FR5-7), C=inbound Remote
+              Call-In (FR8-9), D=cross-cutting (FR10-12). FR-9 idempotency + FR-11 200-record bulk are the
+              "forces-correct-design" stories (idempotency = this project's bulkification analogue). Walking-skeleton
+              subset = FR-1 + FR-4 + inbound half of FR-8. FR-12 (monitoring) + FR-7 alerting deferred to Phase 9.
+              Scenario->FR coverage table closes traceability back to system-landscape.md.
+    [x] 2.2 - docs/requirements/non-functional-requirements.md (integration security, idempotency, callout governor safety, observability, RTO)
+              2026-06-16 DONE. 11 NFRs, each measurable target + named check + cites the FR(s)/scenario it constrains.
+              NFR-1 security/secrets (Named Cred + least-priv integration user), NFR-2 data minimization, NFR-3
+              idempotency (dup-delivery test), NFR-4 governor (no callout-after-DML, 200-rec <=50% limits), NFR-5
+              resilience/RTO 30min replay, NFR-6 observability/SLO (>=99% success, p95), NFR-7 log durability
+              (survives rollback), NFR-8 API stability (no breaking w/o major; deprecation), NFR-9 quality (>=85%),
+              NFR-10 reproducibility (CONSUMES todo-app CI template = reuse proof), NFR-11 recoverability w/ consumers.
+              NFR->FR coverage table proves every FR has >=1 measurable NFR. Feeds RTM (2.4).
+    [x] 2.3 - docs/requirements/integration-contract.md (endpoints/schemas/auth/error-codes/idempotency-key with Vercel)
+              2026-06-16 DONE. Concrete wire contract both sides build against independently. Outbound POST
+              callout:FRS_Service/v1/notifications (F&F, 202 ack); inbound POST /services/apexrest/frs/v1/status
+              (Remote Call-In, 200 applied|duplicate). Full status-code->SF-behavior + retry tables (which codes
+              retry per NFR-5: 429/5xx/timeout yes; 400/401/403/404 no; 409=dedup success). Correlation id echoed
+              across round-trip; idempotency key dedup'd by RECEIVER. Field dictionary w/ data classification
+              (nothing > Internal crosses; Authorization=Restricted never logged). Worked FR-10 round-trip example.
+              /v1 additive-only, breaking->/v2. Feeds Phase 4 mock + Phase 6 CalloutService/inbound + Phase 7 tests.
+    [x] 2.4 - docs/requirements/rtm.md skeleton (100% of FR/NFR IDs)
+              2026-06-17 DONE. 23 rows (12 FR + 11 NFR), all status=planned at Phase 2 close. Design/component/test
+              forward-referenced to planned paths+phase (no blanks; integration-contract.md cited live). Same
+              planned->designed->built->verified->frozen ladder as todo-app; frozen as v1.0.0 snapshot in Phase 8.
+    [x] 2.5 - docs/requirements/risk-register.md (3rd-party downtime, secret leak, event-bus limits, replay storms)
+              2026-06-17 DONE. 15 risks across study's 6 categories + new INTEGRATION category. Integration-specific
+              (R-2 FRS downtime, R-3 replay storm, R-4 missing idempotency, R-10 contract drift) = the risks todo-app
+              never faced -> justify Phase 8 integration-failure drill + Phase 7 contract/resilience tests. Every I=H
+              risk (R-4/5/6/7/9/15) maps to a mandatory test or drill, not just a doc.
+    NOTE (Phase 2 close 2026-06-17): Requirements baseline SET - changes now require a CCB entry. Discovery->FR->NFR
+    ->contract->RTM->risks all cross-traced. NEXT = Phase 3 (architecture/diagrams/ADRs); 3.x design fills the RTM
+    Design column + produces ADR-002/003/004/005, sequence diagrams, trust boundary, package dependency, public-api-spec.
+[x] 3.0 - Phase 3 - Architecture and Diagrams  *** PHASE 3 COMPLETE 2026-06-17 ***
+    [x] 3.1 - docs/architecture/integration-architecture.md (context; sync vs async; where middleware would sit)
+              2026-06-17 DONE. Mermaid context graph (consumers -> base pkg -> FRS Vercel, both directions). Layer-approach
+              table per direction; sync-vs-async rationale (only S2 inbound is sync, correctly); middleware seam at
+              CalloutService (zero-consumer-change insertion point); observability spine via correlation id. Implements ADR-002/004.
+    [x] 3.2 - docs/architecture/sequence-diagrams.md (outbound happy/timeout/retry; inbound happy/duplicate; poison replay)
+              2026-06-17 DONE. 7 Mermaid sequenceDiagrams: §1 outbound happy (domain PE->trigger->Queueable->callout, user
+              txn commits before FRS), §2 retry+backoff via Finalizer (same key), §3 exhaustion->dead-letter->replay (30min
+              RTO), §4 inbound happy (JWT->idempotent apply), §5 duplicate->no-op (unique-constraint, race-safe), §6 logging
+              survives rollback (immediate publish), §7 full round-trip one correlation id (FR-10). Encodes 1-enqueue/txn,
+              same-key-on-retry, unique-upsert-dedupe, immediate-publish. Implements ADR-002/003/004/005.
+    [x] 3.3 - docs/architecture/security-trust-boundary.md (Named Cred auth, secrets, least-priv inbound, InfoSec handoff artifact)
+              2026-06-17 DONE. Trust-boundary Mermaid (2 controlled crossings); auth table per ADR-005; least-priv
+              FRS_Integration perm set (API-only user, runAs-proven scope); secret/key/cert handling + rotation->Phase 8;
+              data-in-transit + classification allowlist. §6 = InfoSec sign-off CHECKLIST (the handoff artifact).
+    [x] 3.4 - docs/architecture/package-dependency.md (base <- todo-app consumer; install ordering)
+              2026-06-17 DONE. Dependency graph (frs-platform base <- todo-app #1 + stub #2). sfdx-project.json
+              dependencies[] example + version-pinning policy (pin major.minor; LATEST-in-minor safe via NFR-8). Install
+              ordering seq (base before consumer) for release AND rollback-with-consumer-installed (NFR-11). Implements ADR-001.
+    [x] 3.5 - docs/architecture/public-api-spec.md (the explicit API + stability guarantees)
+              2026-06-17 DONE. THE public surface (api-governance §1): Logger (6 methods+Severity), EventPublisher (2),
+              CalloutService (sendAsync + Request/Result), inbound /frs/v1/status + outbound /v1/notifications (-> contract).
+              Stability legend (Stable/Beta/Internal); Log__e/Queueable/retry internals marked INTERNAL (hidden). Phase 7
+              consumer-compat test PINS to this file = executable NFR-8. v1.0.0 frozen-surface summary.
+    [x] 3.7 - RTM Design column FILLED + statuses bumped planned->designed
+              2026-06-17 DONE. 20/23 rows now 'designed' (all design artifacts exist). 3 stay 'planned' by design:
+              FR-12 (monitoring surface=Phase 9), NFR-9/NFR-10 (CI pipeline-design=Phase 4). No blanks anywhere.
+    NOTE (Phase 3 close 2026-06-17): "design on paper first" rung COMPLETE - 5 ADRs + 5 architecture docs. Every
+    integration decision (pattern/retry/idempotency/logging/auth/packaging) is recorded + diagrammed + traced before
+    any code. NEXT = Phase 4 (delivery platform): base-pkg DX project, GitLab repo (USER: create sf-platform-enablement),
+    .gitlab-ci.yml consuming todo-app CI template, build+deploy Vercel mock, secrets as masked CI vars, pipeline-design.md.
+    [x] 3.6 - ADR-002-integration-pattern / ADR-003-retry-idempotency / ADR-004-log-architecture / ADR-005-auth-flow
+              2026-06-17 DONE (4 ADRs, started Phase 3 with decisions before diagrams).
+              ADR-002: S1=RPI Fire-and-Forget (domain PE -> trigger -> Queueable callout, bulk-safe); S2=Remote Call-In
+              via custom Apex REST (idempotent, sync applied/duplicate); S3=UI-update PE logging. Excluded sync
+              Request/Reply (callout-after-DML) + Data Virtualization; Batch Sync = fallback.
+              ADR-003: outbound bounded retry(3) via Queueable re-enqueue w/ enqueueJob delay backoff + Finalizer ->
+              Integration_DeadLetter__c -> ReplayService (same idempotency key). Inbound idempotency = Unique External Id
+              field on Integration_Message__c (race-safe vs query-check/Platform-Cache). Retry config in custom metadata.
+              ADR-004: Logger publishes Log__e w/ PUBLISH IMMEDIATELY (survives rollback=NFR-7) -> subscriber -> Log__c
+              queryable; correlationId threads FR-10; Logger hides the event (public-API rule). DE PE-publish limit noted.
+              ADR-005: outbound Named Cred + External Cred OAuth Client-Credentials (API-key fallback); inbound Connected
+              App + JWT Bearer (cert, no stored secret - ties to arc-sf-jwt-bearer skill) as least-priv integration user.
+              MFA/security-keys hardening; rotation = Phase 8 drill. Each flow justified by actor/secret-handling.
+              ADRs already cited in RTM Design column; full RTM status bump (planned->designed) happens at rung 3.7
+              once the diagrams + public-api-spec also land (ADRs are the decision half of the design, not all of it).
+    [ ] 3.7 - Fill RTM design column for every FR/NFR
+[ ] 4.0 - Phase 4 - Source Control, Orgs, Vercel Service, and CI
+    [~] 4.1 - Scaffold base-package DX project (reuse API pin, .forceignore); register package in DevHub
+              2026-06-17 SCAFFOLD DONE (code half): sfdx-project.json (package frs-platform, no namespace), .forceignore,
+              config/project-scratch-def.json (+enableHighVolumePlatformEvents for the PE-backed logging/eventing),
+              package.json (test:unit --passWithNoTests since base is Apex-first), .gitignore, README.md, force-app
+              skeleton w/ .gitkeep in classes/triggers/objects/permissionsets/platformEvents/namedCredentials/
+              externalCredentials/customMetadata/lwc. API PINNED 66.0 to match the shared org farm (todo-app hit
+              'v67 rejected' on same orgs); bump to 67 once orgs confirmed. REMAINING (needs Dev Hub): sf package create
+              to register frs-platform -> populates packageAliases (separate 6/day pkg-build budget).
+    [ ] 4.2 - USER: create GitLab project sf-platform-enablement; protect main (MR-only) like sf-todo  <<< BLOCKING USER STEP
+    [~] 4.3 - .gitlab-ci.yml that include:s the todo-app ci-templates/ (SECOND-CONSUMER validation - log any template gaps)
+              2026-06-17 DRAFTED: consumes sf-todo template via cross-project include (project:/file:/ref:main - NOT local,
+              since template lives in sf-todo repo). Sets SF_PACKAGE=frs-platform, SF_PERMSET=FRS_Integration. Thin jobs
+              extend .sf-scan/.sf-lwc-test/.sf-apex-test/.sf-package/.sf-staging-install/.sf-prod-install + a CONSUMER-ADDED
+              contract-test job (template has no integration testing). FINDING logged (NFR-10): cross-project ref:main
+              couples to sf-todo default branch; proper fix = dedicated sf-ci-templates repo + tag ref. Can't run until repo
+              exists (4.2) + orgs connected.
+    [ ] 4.4 - Build + deploy the Vercel mock service (REST out, webhook in, caller into SF) per integration-contract.md  (needs Vercel)
+    [ ] 4.5 - Store SFDX auth URLs (+ any deploy tokens) as masked CI vars (base64 lesson); integration secrets = ORG config not CI
+    [x] 4.6 - docs/devops/pipeline-design.md (stages incl. integration-test job; Vercel deploy/verify)
+              2026-06-17 DONE (written BEFORE the YAML per todo-app discipline). 7-job stage map; cross-project-include
+              decision + NFR-10 FINDING; contract-test as consumer extension (don't edit shared template); secrets model
+              (SFDX auth URLs in CI; OAuth/JWT secrets = org metadata per ADR-005; Vercel has own deploy); shared scratch
+              budget; dependency-ordered release spans 2 pipelines (base here, consumer in todo-app repo).
+    [ ] 4.7 - Verify gates: planted failing integration test goes red then green  (needs running pipeline)
+    NOTE (Phase 4 partial 2026-06-17): code-side scaffold + pipeline design DONE without orgs/repo. BLOCKING USER STEPS to
+    finish Phase 4: (4.2) create+protect GitLab project sf-platform-enablement; then I do (4.1-register) sf package create,
+    (4.4) Vercel mock, (4.5) CI vars, (4.7) gate drill. sf CLI session-auth caveat applies (see project_sf_session_auth).
+[ ] 5.0 - Phase 5 - Walking Skeleton
+    [ ] 5.1 - Base pkg: Logger.log(String) -> one Platform Event/Log; consumer test
+    [ ] 5.2 - One outbound callout to Vercel /health via Named Cred (HttpCalloutMock unit test + real scratch-org call)
+    [ ] 5.3 - Vercel /health answers + logs inbound hit
+    [ ] 5.4 - Package version 0.1.0.1 via CI, installed in prod; tag v0.1.0 + CHANGELOG.md
+    [ ] 5.5 - Smoke-test checklist recorded; RTM skeleton rows verified
+[ ] 6.0 - Phase 6 - Core Platform Components & Bidirectional Integration
+    [ ] 6.1 - Logger/error framework (Platform-Event-backed, survives rollback; severity; correlation id)
+    [ ] 6.2 - Generic EventPublisher wrapper (testable)
+    [ ] 6.3 - Outbound CalloutService (Named Cred + External Services; retry/backoff; async; bulk-safe)
+    [ ] 6.4 - Inbound path (Vercel -> SF Platform Event/REST; IDEMPOTENT apply by key)
+    [ ] 6.5 - Full round-trip (todo complete -> event -> callout -> webhook back -> SF update; correlation chain logged)
+    [ ] 6.6 - todo-app consumes the base package (dependency declared; calls Logger/EventPublisher)
+    [ ] 6.7 - Per-MR tests incl. idempotency + 200-record bulk callout path; coverage >=85%; RTM updated
+[ ] 7.0 - Phase 7 - Test Strategy Expansion
+    [ ] 7.1 - HttpCalloutMock suites (timeout/4xx/5xx/malformed)
+    [ ] 7.2 - Platform Event harness via Test.getEventBus().deliver()
+    [ ] 7.3 - Contract tests against deployed Vercel mock (in CI)
+    [ ] 7.4 - Resilience + idempotency tests (retry exhaustion -> poison; duplicate -> no-op)
+    [ ] 7.5 - Consumer-compatibility test (public API surface guard = deprecation policy made executable)
+    [ ] 7.6 - Playwright e2e for the headline round-trip
+    [ ] 7.7 - docs/testing/test-strategy.md + test-data-strategy.md; RTM test column 100%
+[ ] 8.0 - Phase 8 - Release Management and Operations
+    [ ] 8.1 - release-runbook.md (dependency-ordered base->consumer install)
+    [ ] 8.2 - rollback-runbook.md + REHEARSAL (rollback of a package that has consumers; additive policy)
+    [ ] 8.3 - integration-failure runbook + LIVE DRILL (Vercel down/timeout/poison -> detect/retry/replay) <- earns its keep
+    [ ] 8.4 - breaking-change/deprecation DRILL (base v2 evolves API; todo-app consumer survives upgrade)
+    [ ] 8.5 - secrets-rotation-runbook.md + ROTATION DRILL (zero-downtime Named Cred/API key rotation)
+    [ ] 8.6 - salesforce-release-readiness.md (seasonal impact on integration/API surface)
+    [ ] 8.7 - post-release-review-template.md + v1.0.0 retro
+    [ ] 8.8 - Release v1.0.0 (full set; tag; changelog; RTM frozen)
+[ ] 9.0 - Phase 9 - Platform Deepening: Observability, Reuse, Hardening
+    [ ] 9.1 - Observability surface (LWC/report over log events: success rate, latency, failures) = monitoring
+    [ ] 9.2 - Alerting on integration failure (flow/email/event on N failures) = alerting
+    [ ] 9.3 - docs/devops/platform-metrics.md (integration SLOs + DORA from real history)
+    [ ] 9.4 - Second consumer stub adopts base API with ZERO base changes (proof of reuse)
+    [ ] 9.5 - docs/architecture/backup-and-encryption.md (Shield design + encrypted fields + backup)
+    [ ] 9.6 - docs/devops/consumer-onboarding.md (zero-to-consuming; time yourself)
+
+DEFERRED: real middleware (MuleSoft), Data Cloud, paid Shield/SSO (design-only), load testing, real SAFe ceremonies.

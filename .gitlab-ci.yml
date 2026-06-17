@@ -1,0 +1,68 @@
+# frs-platform CI — a CONSUMER of the todo-app's reusable Salesforce pipeline template.
+#
+# This is the "second app team adopts the template" proof (todo-app Phase 9.1 acceptance
+# criterion + this project's NFR-10). Because the template lives inside the sf-todo repo,
+# we consume it cross-project (not `local:`). See docs/devops/pipeline-design.md §3.1 for
+# the coupling FINDING and the recommended remediation (dedicated template repo + tag ref).
+#
+# Design authority: docs/devops/pipeline-design.md. Secrets (masked):
+# SFDX_AUTH_URL_{DEVHUB,PROD}_B64 — DevHub unprotected (MR pipelines), prod protected.
+
+include:
+  - project: "andysolomon/sf-todo"
+    file: "ci-templates/salesforce-pipeline.yml"
+    ref: main # FINDING: pin to a tag once ci-templates moves to a dedicated repo (pipeline-design §3.1)
+
+variables:
+  SF_PACKAGE: "frs-platform"
+  SF_PERMSET: "FRS_Integration"
+  SF_SEED_SCRIPT: "scripts/apex/seed-integration.apex" # added in Phase 5/6
+
+stages:
+  - validate
+  - test
+  - package
+  - test-release
+  - release
+
+# Unconditional (anchors a passing pipeline for docs-only MRs under
+# only_allow_merge_if_pipeline_succeeds) — per the template README note.
+scan:
+  extends: .sf-scan
+  stage: validate
+  rules:
+    - when: always
+
+lwc-test:
+  extends: .sf-lwc-test
+  stage: validate
+
+apex-test:
+  extends: .sf-apex-test
+  stage: test
+
+# Consumer-added: the template carries no integration testing (the todo-app had none).
+# Phase 5: HttpCalloutMock unit cases (cost 0). Phase 7: assert the deployed Vercel mock
+# satisfies integration-contract.md. Does NOT modify the shared template (pipeline-design §3.2).
+contract-test:
+  extends: .sf-lwc-test # placeholder runner until the Apex/contract job lands in Phase 5
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
+  script:
+    - echo "contract-test placeholder — real HttpCalloutMock + deployed-mock assertions land in Phase 5/7"
+
+version:
+  extends: .sf-package
+  stage: package
+
+staging-install:
+  extends: .sf-staging-install
+  stage: test-release
+  needs: [version]
+
+prod-install:
+  extends: .sf-prod-install
+  stage: release
+  needs: [version, staging-install]
