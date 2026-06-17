@@ -2,7 +2,7 @@
   "packageDirectories": [
     {
       "versionName": "v0.1",
-      "versionNumber": "1.0.0.NEXT",
+      "versionNumber": "0.1.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "frs-platform",
@@ -13,5 +13,7 @@
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "66.0",
-  "packageAliases": {}
+  "packageAliases": {
+    "frs-platform": "0HogK00000038c9SAA"
+  }
 }

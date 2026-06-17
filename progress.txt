@@ -127,7 +127,11 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
               once the diagrams + public-api-spec also land (ADRs are the decision half of the design, not all of it).
     [ ] 3.7 - Fill RTM design column for every FR/NFR
 [ ] 4.0 - Phase 4 - Source Control, Orgs, Vercel Service, and CI
-    [~] 4.1 - Scaffold base-package DX project (reuse API pin, .forceignore); register package in DevHub
+    [x] 4.1 - Scaffold base-package DX project (reuse API pin, .forceignore); register package in DevHub
+              2026-06-17 PACKAGE REGISTERED: frs-platform = 0HogK00000038c9SAA in DevHub (00DgK00000QYu0qUAD - SAME DevHub
+              as todo-app, confirmed: it holds todo-app pkg 0HogK0000002sM5SAI -> base<-consumer dependency will resolve).
+              todo-app GOTCHA recurred: sf package create rewrote sfdx-project.json (default:false, wiped versionName/
+              versionNumber/description) - REPAIRED (default:true, v0.1 / 0.1.0.NEXT / walking-skeleton desc). Scaffold below:
               2026-06-17 SCAFFOLD DONE (code half): sfdx-project.json (package frs-platform, no namespace), .forceignore,
               config/project-scratch-def.json (+enableHighVolumePlatformEvents for the PE-backed logging/eventing),
               package.json (test:unit --passWithNoTests since base is Apex-first), .gitignore, README.md, force-app
@@ -135,7 +139,14 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
               externalCredentials/customMetadata/lwc. API PINNED 66.0 to match the shared org farm (todo-app hit
               'v67 rejected' on same orgs); bump to 67 once orgs confirmed. REMAINING (needs Dev Hub): sf package create
               to register frs-platform -> populates packageAliases (separate 6/day pkg-build budget).
-    [ ] 4.2 - USER: create GitLab project sf-platform-enablement; protect main (MR-only) like sf-todo  <<< BLOCKING USER STEP
+    [x] 4.2 - USER: create GitLab project sf-platform-enablement; protect main (MR-only) like sf-todo
+              2026-06-17 DONE. Repo: https://gitlab.com/andysolomon/sf-platform-enablement (private). Nested git repo
+              initialized in projects/platform-enablement/ (like sf-todo nests in projects/todo-app/), scaffold committed +
+              pushed to main. main protected EXACTLY like sf-todo: push=No one, merge=Maintainers, only_allow_merge_if_
+              pipeline_succeeds=true, merge_method=merge, remove_source_branch_after_merge=true. (GitLab auto-protected main
+              with push=Maintainers on creation; re-protected to push=No one via DELETE+POST.) Push showed macOS keychain
+              'failed to store: -61' (no-keychain session, harmless - push succeeded). First pipeline will be RED until
+              4.1-register (sf package create) + 4.5 (CI auth vars) land - expected.
     [~] 4.3 - .gitlab-ci.yml that include:s the todo-app ci-templates/ (SECOND-CONSUMER validation - log any template gaps)
               2026-06-17 DRAFTED: consumes sf-todo template via cross-project include (project:/file:/ref:main - NOT local,
               since template lives in sf-todo repo). Sets SF_PACKAGE=frs-platform, SF_PERMSET=FRS_Integration. Thin jobs
@@ -143,7 +154,31 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
               contract-test job (template has no integration testing). FINDING logged (NFR-10): cross-project ref:main
               couples to sf-todo default branch; proper fix = dedicated sf-ci-templates repo + tag ref. Can't run until repo
               exists (4.2) + orgs connected.
-    [ ] 4.4 - Build + deploy the Vercel mock service (REST out, webhook in, caller into SF) per integration-contract.md  (needs Vercel)
+    [~] 4.4 - Build + deploy the Vercel mock service (REST out, webhook in, caller into SF) per integration-contract.md
+              2026-06-17 BUILT + VERIFIED LOCALLY (deploy half remains). Lives at projects/frs-mock-service/ (separate from
+              the SF DX repo per pipeline-design §3.4). Next.js 15 App Router, web-standard Request/Response handlers, jose
+              for crypto. Endpoints implement integration-contract.md /v1: GET /v1/health; POST /oauth/token (OAuth client-
+              credentials, ADR-005 outbound); POST /v1/notifications (Bearer-auth, contract validation w/ field allowlist,
+              in-memory idempotency dedupe -> 202/409/400/401); POST /v1/simulate-callback (triggers S2 Remote Call-In to SF
+              via JWT bearer, env-gated -> 503 if SF creds absent). `npm run build` GREEN (types+lint pass). Runtime smoke
+              8/8 PASS: health 200, token issued, bad-creds 401, no-auth 401, valid 202, DUPLICATE 409, unknown-field 400,
+              callback-no-creds 503. Tokens stateless HS256 (serverless-safe); idempotency in-mem per-instance (mock caveat;
+              authoritative dedupe is SF-side NFR-3) - both documented. REMAINING: deploy to Vercel (needs Vercel auth) ->
+              the deploy URL becomes the Named Credential endpoint; set env vars in Vercel project.
+              2026-06-17 DEPLOYED to Vercel prod: project frs-mock-service, URL https://frs-mock-service-rezdny3pa-
+              andrewsolomonedus-projects.vercel.app (● Ready, 32s build). Env vars set (encrypted, Production): FRS_CLIENT_ID
+              =salesforce-platform, FRS_CLIENT_SECRET + FRS_TOKEN_SECRET (random; saved in frs-mock-service/.env.local
+              gitignored - needed for the SF External Credential in Phase 6). BLOCKER: Vercel Deployment Protection is ON
+              -> live URL returns 401 HTML auth wall, which would break SF callouts. USER ACTION: disable Vercel
+              Authentication (dashboard: frs-mock-service > Settings > Deployment Protection > Vercel Authentication OFF),
+              OR provide a VERCEL_TOKEN so I can PATCH ssoProtection=null via REST API. The mock's OWN OAuth still protects
+              /v1/notifications, so disabling the Vercel wall is correct (not insecure). After OFF: re-run live smoke.
+    [x] 4.5 - Store SFDX auth URLs (+ any deploy tokens) as masked CI vars (base64 lesson); integration secrets = ORG config not CI
+              2026-06-17 DONE by REUSING sf-todo's values (Andy's call - same DevHub + same prod org). Sidesteps the CLI
+              redaction entirely: GitLab returns masked VALUES to the owner via API, so copied repo->repo with
+              glab variable get|set (values never printed). sf-platform-enablement now has SFDX_AUTH_URL_DEVHUB_B64
+              (masked, unprotected) + SFDX_AUTH_URL_PROD_B64 (masked, protected) - flags mirror sf-todo. Both verified to
+              decode to force://… (valid, not placeholders). Integration secrets (OAuth/JWT) stay ORG config per ADR-005, not CI.
     [ ] 4.5 - Store SFDX auth URLs (+ any deploy tokens) as masked CI vars (base64 lesson); integration secrets = ORG config not CI
     [x] 4.6 - docs/devops/pipeline-design.md (stages incl. integration-test job; Vercel deploy/verify)
               2026-06-17 DONE (written BEFORE the YAML per todo-app discipline). 7-job stage map; cross-project-include
@@ -154,12 +189,47 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
     NOTE (Phase 4 partial 2026-06-17): code-side scaffold + pipeline design DONE without orgs/repo. BLOCKING USER STEPS to
     finish Phase 4: (4.2) create+protect GitLab project sf-platform-enablement; then I do (4.1-register) sf package create,
     (4.4) Vercel mock, (4.5) CI vars, (4.7) gate drill. sf CLI session-auth caveat applies (see project_sf_session_auth).
-[ ] 5.0 - Phase 5 - Walking Skeleton
-    [ ] 5.1 - Base pkg: Logger.log(String) -> one Platform Event/Log; consumer test
-    [ ] 5.2 - One outbound callout to Vercel /health via Named Cred (HttpCalloutMock unit test + real scratch-org call)
-    [ ] 5.3 - Vercel /health answers + logs inbound hit
-    [ ] 5.4 - Package version 0.1.0.1 via CI, installed in prod; tag v0.1.0 + CHANGELOG.md
-    [ ] 5.5 - Smoke-test checklist recorded; RTM skeleton rows verified
+[ ] 5.0 - Phase 5 - Walking Skeleton   (SOURCE PREPPED 2026-06-17, awaiting deploy/test/release execution)
+    [~] 5.1 - Base pkg: Logger.log(String) -> one Platform Event/Log; consumer test
+              2026-06-17 SOURCE AUTHORED + structurally validated (8 Apex files paired w/ meta, 19 XML well-formed; NOT yet
+              deployed - holds shared scratch budget for execution). Log__e PE (publishBehavior=PublishImmediately, ADR-004)
+              + Log__c queryable object (+ fields Message/Severity/Correlation_Id/Category) + LogEventSubscriber trigger ->
+              LogEventHandler (@SuppressWarnings CRUD quarantine marker) persists Log__c. Logger.cls (inherited sharing;
+              log/error/warn/info + Exception overload + category). LoggerTest: log_writesDurableRecord, survivesRollback
+              (NFR-7), severityHelpers - via Test.getEventBus().deliver().
+    [~] 5.2 - One outbound callout to Vercel /health via Named Cred (HttpCalloutMock unit test + real scratch-org call)
+              2026-06-17 SOURCE AUTHORED: CalloutService.ping() GETs callout:FRS_Service/v1/health (no hard-coded URL),
+              logs outcome. CalloutServiceTest uses HttpCalloutMock (200 + 500 cases, asserts endpoint = Named Cred path).
+              REAL scratch-org call = execution (needs FRS_Service Named/External Credential set up per
+              docs/devops/named-credential-setup.md, which needs the live Vercel URL w/ protection OFF).
+    [x] 5.3 - Vercel /health answers + logs inbound hit
+              2026-06-17 DONE in 4.4 - mock GET /v1/health returns {status:ok,...}; verified in local smoke (8/8).
+    [ ] 5.4 - Package version 0.1.0.1 via CI, installed in prod; tag v0.1.0 + CHANGELOG.md   (EXECUTION: needs CI vars 4.5 + MR)
+    [ ] 5.5 - Smoke-test checklist recorded; RTM skeleton rows verified   (EXECUTION)
+    PREP NOTE (2026-06-17): also wrote FrsStatusResource (inbound FR-8 skeleton: 200 applied + logs echoed correlation id)
+    + test; FRS_Integration least-priv perm set (FrsStatusResource class access + Log__e create only); scripts/apex/
+    seed-integration.apex (SF_SEED_SCRIPT); docs/devops/named-credential-setup.md (execution runbook for the credential).
+    *** VALIDATED ON SCRATCH ORG 2026-06-17 (2 scratch creates used, cleaned up) ***
+    Deploy GREEN + Apex tests 7/7 PASS + Org-Wide Coverage 96% (Logger 95 / FrsStatusResource 94 / others 100 - all >85 gate).
+    survivesRollback test PASSES -> publish-immediate + Database.rollback semantics CONFIRMED in Apex test context (NFR-7
+    de-risked). API 66.0 ACCEPTED by orgs. Code Analyzer could NOT run locally (PMD/CPD/SFGE engines need Java engine init
+    that failed this session) -> runs in CI (template installs JRE). 3 WATCH items: (a) survivesRollback CONFIRMED, (b) API66
+    CONFIRMED, (c) analyzer DEFERRED-to-CI.
+    TWO REAL FINDINGS the scratch validation caught (interview gold):
+    (1) **base-name namespace collision**: Log__e (platform event) and Log__c (custom object) CANNOT coexist - both have
+        base name "Log" -> "That object name is already in use". FIX: renamed event Log__e -> LogEvent__e (frees "Log" for
+        Log__c). Updated Logger/LogEventHandler/LogEventSubscriber/permset + all 7 docs. Custom objects, platform events,
+        custom metadata, big objects share one base-name namespace per org.
+    (2) [CORRECTED] What looked like "PE-before-Apex ordering" was actually a CASCADE from finding #1: when Log__e failed
+        to deploy (collision), Apex referencing it showed "Invalid type". POST-RENAME a single combined deploy SUCCEEDS -
+        confirmed via dry-run to DevHub (20 components, 0 failures, 0 scratch). So the CI template's single-pass deploy is
+        FINE; no two-pass workaround needed. Lesson: don't generalize a cascade symptom into a separate root cause without
+        isolating it (a good debugging discipline note).
+    Also fixed: scratch def had invalid platformEventSettings.enableHighVolumePlatformEvents (removed - high-volume is
+    default); permset Create-LogEvent__e required Read-LogEvent__e (added allowRead).
+    EXECUTION ORDER once toggles done: feature branch -> MR (gate drill 4.7: plant failing test red->green; mind 2-pass
+    deploy) -> set up Named Credential (named-credential-setup.md) -> live ping (5.2) -> merge -> package version (5.4) ->
+    staging -> prod -> tag v0.1.0. Code is PROVEN deployable+green; only the live callout + CI/prod release remain.
 [ ] 6.0 - Phase 6 - Core Platform Components & Bidirectional Integration
     [ ] 6.1 - Logger/error framework (Platform-Event-backed, survives rollback; severity; correlation id)
     [ ] 6.2 - Generic EventPublisher wrapper (testable)

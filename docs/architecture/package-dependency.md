@@ -11,7 +11,7 @@
 
 ```mermaid
 graph TD
-    BASE["frs-platform (base unlocked package)\nLogger · EventPublisher · CalloutService · FrsStatusResource\nLog__e · domain PE · Named Credential · Integration_Message__c"]
+    BASE["frs-platform (base unlocked package)\nLogger · EventPublisher · CalloutService · FrsStatusResource\nLogEvent__e · domain PE · Named Credential · Integration_Message__c"]
     TODO["todo-app (consumer #1)\ndepends on frs-platform @ pinned version"]
     C2["stub consumer #2 (Phase 9)\ndepends on frs-platform — ZERO base change"]
 

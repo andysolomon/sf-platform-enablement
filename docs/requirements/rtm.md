@@ -25,7 +25,7 @@ Rules (same as todo-app):
 
 | ID | Summary | Design | Component(s) | Test(s) | Status |
 |---|---|---|---|---|---|
-| FR-1 | Log via Logger | ADR-004, public-api-spec.md §1 | `Logger`, `Log__e` | `LoggerTest.log_writesDurableRecord` | designed |
+| FR-1 | Log via Logger | ADR-004, public-api-spec.md §1 | `Logger`, `LogEvent__e` | `LoggerTest.log_writesDurableRecord` | designed |
 | FR-2 | Logs survive rollback | ADR-004, sequence-diagrams.md §6 | `Logger` (immediate-mode publish) | `LoggerTest.survivesRollback` | designed |
 | FR-3 | Publish via EventPublisher | public-api-spec.md §2 | `EventPublisher` | `EventPublisherTest.publish_*` | designed |
 | FR-4 | Governed outbound callout | public-api-spec.md §3, security-trust-boundary.md, ADR-005, integration-contract.md §3 | `CalloutService`, `FRS_Service` Named Credential | `CalloutServiceTest` (HttpCalloutMock) | designed |
@@ -48,7 +48,7 @@ Rules (same as todo-app):
 | NFR-4 | Governor-limit safety | sequence-diagrams.md §1, ADR-002 | `CalloutQueueable` (one enqueue/txn) | `CalloutServiceTest.bulk200_withinLimits` (no callout-after-DML) | designed |
 | NFR-5 | Resilience & RTO | ADR-003, sequence-diagrams.md §2-§3 | `RetryPolicy`, `ReplayService`, `Integration_DeadLetter__c` | retry/replay tests + Phase 8 integration-failure drill (timed RTO) | designed |
 | NFR-6 | Observability & SLO | ADR-004, integration-architecture.md §5, sequence-diagrams.md §7 | `Logger`, `lwc/integrationHealth` | `IntegrationRoundTripTest.correlationChain`; Phase 9 surface renders success%/p95 | designed |
-| NFR-7 | Log durability (survives rollback) | ADR-004, sequence-diagrams.md §6 | `Logger` immediate-mode publish + `Log__e` subscriber | `LoggerTest.survivesRollback` | designed |
+| NFR-7 | Log durability (survives rollback) | ADR-004, sequence-diagrams.md §6 | `Logger` immediate-mode publish + `LogEvent__e` subscriber | `LoggerTest.survivesRollback` | designed |
 | NFR-8 | Public-API stability / compat | api-governance.md, public-api-spec.md, package-dependency.md §2 | annotated public API surface | consumer-compatibility test (pinned to public-api-spec) + Phase 8 deprecation drill | designed |
 | NFR-9 | Code quality | — (pipeline-design.md, Phase 4) | CI coverage + Code Analyzer gates | CI gates (≥85%, 0 crit/high) | planned |
 | NFR-10 | Reproducibility & CI reuse | — (pipeline-design.md, Phase 4) | `.gitlab-ci.yml` `include:` of todo-app template, `scripts/org-setup.sh` | CI run consuming template + notes file; timed onboarding (Phase 9) | planned |
