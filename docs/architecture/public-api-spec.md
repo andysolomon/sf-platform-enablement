@@ -35,8 +35,8 @@ global inherited sharing class Logger {
 }
 ```
 
-Guarantees: a logged record is **durable across rollback** (NFR-7 — publishes `Log__e`
-immediately). Consumers never reference `Log__e` or `Log__c` directly (those are ⚫ internal —
+Guarantees: a logged record is **durable across rollback** (NFR-7 — publishes `LogEvent__e`
+immediately). Consumers never reference `LogEvent__e` or `Log__c` directly (those are ⚫ internal —
 the storage mechanism can change without a major bump).
 
 ## 2. Apex — `EventPublisher` 🟢 (FR-3)
@@ -82,11 +82,11 @@ Consumers do **not** see the Queueable, Finalizer, or retry internals (⚫ inter
 
 | Event | Direction | Public fields | Notes |
 |---|---|---|---|
-| `Log__e` | internal publish via `Logger` | ⚫ not for direct consumer use | hidden behind `Logger` |
+| `LogEvent__e` | internal publish via `Logger` | ⚫ not for direct consumer use | hidden behind `Logger` |
 | domain event(s) consumers publish via `EventPublisher` | consumer → platform | name + documented fields | the S1 trigger surface |
 
 The **shape** of any domain event consumers publish/subscribe to is public and versioned here
-when added; `Log__e`'s shape is internal.
+when added; `LogEvent__e`'s shape is internal.
 
 ## 5. Inbound REST contract 🟢 (FR-8, FR-9)
 

@@ -124,8 +124,8 @@ sequenceDiagram
 sequenceDiagram
     participant TX as Any transaction
     participant LG as Logger (public API)
-    participant LE as Log__e (Publish Immediately)
-    participant LS as Log__e subscriber
+    participant LE as LogEvent__e (Publish Immediately)
+    participant LS as LogEvent__e subscriber
     participant LC as Log__c (queryable)
 
     TX->>LG: error("...", corr C)
