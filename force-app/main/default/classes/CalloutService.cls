@@ -10,7 +10,13 @@
  *
  * The retain/retry/dead-letter behavior is specified in ADR-003 and enforced by RetryPolicy +
  * CalloutQueueable.
+ *
+ * @SuppressWarnings PMD.ApexCRUDViolation — deadLetter() writes Integration_DeadLetter__c as the
+ * trusted platform path (system context, runs inside the async callout job); CRUD/FLS enforcement
+ * would defeat the guarantee that no exhausted call is ever lost. Greppable quarantine marker
+ * (todo-app convention).
  */
+@SuppressWarnings('PMD.ApexCRUDViolation')
 global with sharing class CalloutService {
     // Health-check probe retained from the walking skeleton (FR-4).
     @TestVisible

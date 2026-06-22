@@ -9,7 +9,12 @@
  *
  * The reservation runs in the same transaction as any record mutation the caller performs, so a
  * downstream failure rolls back the reservation too — the message can then be safely re-applied.
+ *
+ * @SuppressWarnings PMD.ApexCRUDViolation — reserving the idempotency key MUST succeed as the
+ * trusted platform dedupe path regardless of the caller's FLS; CRUD enforcement would break the
+ * exactly-once guarantee. Greppable quarantine marker (todo-app convention).
  */
+@SuppressWarnings('PMD.ApexCRUDViolation')
 public with sharing class IdempotencyGuard {
     public enum Outcome {
         APPLIED,

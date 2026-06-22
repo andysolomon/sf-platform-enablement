@@ -8,7 +8,12 @@
  *
  * Limits are config-not-code: max attempts comes from Integration_Setting__mdt (Default), with
  * a safe constant fallback — tuning resilience is a metadata change, never a public-API change.
+ *
+ * @SuppressWarnings PMD.ApexCRUDViolation — reads Custom Metadata (Integration_Setting__mdt),
+ * which is not CRUD-protected data; the rule is a false positive here. Greppable quarantine
+ * marker (todo-app convention).
  */
+@SuppressWarnings('PMD.ApexCRUDViolation')
 global with sharing class RetryPolicy {
     @TestVisible
     private static final Integer DEFAULT_MAX_ATTEMPTS = 3;

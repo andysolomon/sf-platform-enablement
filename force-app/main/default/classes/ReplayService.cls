@@ -5,7 +5,12 @@
  * the FRS side already processed an earlier attempt the replay is safely deduped there (contract
  * §3.3: 409 = already applied = success). No data loss, no double-effect. The dead-letter record
  * is marked REPLAYED for the audit trail.
+ *
+ * @SuppressWarnings PMD.ApexCRUDViolation — the trusted operator replay path (gated by the
+ * FRS_Operations permission set, charter SoD) reads + updates Integration_DeadLetter__c in system
+ * context. Greppable quarantine marker (todo-app convention).
  */
+@SuppressWarnings('PMD.ApexCRUDViolation')
 global with sharing class ReplayService {
     global static void replay(Id deadLetterId) {
         Integration_DeadLetter__c dl = [
