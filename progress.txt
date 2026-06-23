@@ -262,7 +262,27 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
     EXECUTION ORDER once toggles done: feature branch -> MR (gate drill 4.7: plant failing test red->green; mind 2-pass
     deploy) -> set up Named Credential (named-credential-setup.md) -> live ping (5.2) -> merge -> package version (5.4) ->
     staging -> prod -> tag v0.1.0. Code is PROVEN deployable+green; only the live callout + CI/prod release remain.
-[ ] 6.0 - Phase 6 - Core Platform Components & Bidirectional Integration
+[~] 6.0 - Phase 6 - Core Platform Components & Bidirectional Integration
+    *** 2026-06-23: MR !3 (6-A outbound + 6-B inbound + 6-C prep) MERGED to main. main release pipeline running
+        (version builds frs-platform 0.2.0 + staging-install); prod-install is the MANUAL gate (Andy, charter SoD).
+        CI debugging FINDINGS (interview-gold, all external to the Phase 6 code):
+        (1) scan RED on 5 High ApexCRUDViolation in the new platform-infra classes -> fixed with the v0.1.0
+            convention: class-level @SuppressWarnings('PMD.ApexCRUDViolation') + ApexDoc rationale (greppable
+            quarantine marker). CalloutService/IdempotencyGuard/ReplayService/RetryPolicy.
+        (2) apex-test RED: `sf org login sfdx-url` crashed ("Detected unsettled top-level await ... await
+            cli.run()") -> ROOT CAUSE = the shared sf-todo template floats SF_CI_IMAGE=node:22, which drifted to
+            22.23.0 and breaks the pinned CLI 2.137.7 login. THE NFR-10 cross-project coupling risk (ref: main +
+            floating image) MATERIALIZED. FIX = pin SF_CI_IMAGE=node:20 consumer-side in .gitlab-ci.yml (lwc-test
+            passed on node:22 because it never calls sf login). Real remediation still owed: template -> prebaked/
+            pinned image (pipeline-design 3.1). A RED HERRING en route: refreshed the (5-day-old) DevHub auth URL
+            CI var first (secret-safe: sf org auth show-sfdx-auth-url -o DevHub | base64 | glab variable set,
+            never printed; note glab variable set only CREATEs -> delete then set to update) — harmless but not
+            the cause.
+        (3) LIMIT_EXCEEDED on scratch create: DevHub ActiveScratchOrgs is 3 concurrent and all 3 were held by
+            OTHER projects (airline-dev/hotel-booking/sfra-dev). `sf limits api display` cols are REMAINING|MAX
+            (0|3 = full, not empty — earlier misread). Freed one slot by deleting airline-dev (Andy authorized;
+            don't delete orgs you didn't create without asking). DailyScratchOrgs (6/day) is a SEPARATE limit.
+        MR pipeline = scan/lwc-test/apex-test/contract-test only; version/staging/prod are release-gated to main. ***
     [ ] 6.1 - Logger/error framework (Platform-Event-backed, survives rollback; severity; correlation id)
     [x] 6.2 - Generic EventPublisher wrapper (testable)   *** Phase 6 STARTED 2026-06-17; MR 6-A foundation ***
               2026-06-17 DONE + validated on scratch (100% class cov, 97% org-wide, 10 tests pass). EventPublisher.publish
