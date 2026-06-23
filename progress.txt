@@ -283,6 +283,13 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
             (0|3 = full, not empty — earlier misread). Freed one slot by deleting airline-dev (Andy authorized;
             don't delete orgs you didn't create without asking). DailyScratchOrgs (6/day) is a SEPARATE limit.
         MR pipeline = scan/lwc-test/apex-test/contract-test only; version/staging/prod are release-gated to main. ***
+    *** 2026-06-23 RELEASED v0.2.0: MR !4 bumped versionNumber -> 0.2.0.NEXT (api-governance minor bump) -> main
+        pipeline built frs-platform 0.2.0.1 (04tgK000000DvN3QAK, 97% cov) -> staging-install GREEN -> prod-install
+        (Andy-authorized) INSTALLED to prodtest. Tag v0.2.0 pushed. INBOUND LIVE-VERIFIED in prodtest against 0.2.0.1
+        (anonymous apex: apply=applied, replay=duplicate, recordCount=1 -> FR-8/FR-9 proven in prod, record cleaned up).
+        RTM: FR-3/4/5/6/7/8/9/11 + NFR-3/4/5 -> verified (CI-green; FR-8/9 also live). FR-10 -> built (full live
+        round-trip still needs the OUTBOUND callout = FRS_Service Named Credential, sandbox-blocked for the agent;
+        inbound JWT/Connected App optional since logic is proven). Phase 6 FUNCTIONALLY COMPLETE + SHIPPED. ***
     [ ] 6.1 - Logger/error framework (Platform-Event-backed, survives rollback; severity; correlation id)
     [x] 6.2 - Generic EventPublisher wrapper (testable)   *** Phase 6 STARTED 2026-06-17; MR 6-A foundation ***
               2026-06-17 DONE + validated on scratch (100% class cov, 97% org-wide, 10 tests pass). EventPublisher.publish
