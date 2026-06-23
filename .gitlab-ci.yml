@@ -17,6 +17,12 @@ variables:
   SF_PACKAGE: "frs-platform"
   SF_PERMSET: "FRS_Integration"
   SF_SEED_SCRIPT: "scripts/apex/seed-integration.apex" # added in Phase 5/6
+  # NFR-10 remediation (cross-project coupling materialized): the shared template floats
+  # SF_CI_IMAGE=node:22. node:22 drifted to 22.23.0, which crashes `sf org login sfdx-url`
+  # ("Detected unsettled top-level await … await cli.run()") with the pinned CLI 2.137.7 —
+  # green at v0.1.0 (2026-06-17), red on the first run after. Pin to node:20 (LTS, sf-CLI
+  # supported) here until the template adopts a prebaked/pinned image (pipeline-design §3.1).
+  SF_CI_IMAGE: "node:20"
 
 stages:
   - validate
