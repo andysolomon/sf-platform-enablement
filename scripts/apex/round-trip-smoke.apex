@@ -22,7 +22,7 @@ req.body = JSON.serialize(new Map<String, Object>{
     'eventType' => 'todo.completed',
     'occurredAt' => System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\''),
     'source' => 'round-trip-smoke',
-    'payload' => new Map<String, Object>{ 'salesforceRecordId' => UserInfo.getUserId(), 'status' => 'Completed' }
+    'payload' => new Map<String, Object>{ 'recordId' => UserInfo.getUserId(), 'status' => 'Completed' }
 });
 CalloutService.sendAsync(req);
 System.debug('OUTBOUND enqueued. correlationId=' + corr + ' idempotencyKey=' + req.idempotencyKey);

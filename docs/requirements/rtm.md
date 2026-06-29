@@ -25,9 +25,17 @@ Rules (same as todo-app):
 > (tag `v0.2.0`), installed to prodtest. FR-3/5/6/7/8/9/11 and NFR-3/4/5 → **`verified`**: the
 > full suite ran green **in CI** (apex-test on the 0.2.0 pipeline, 97% coverage). FR-8/FR-9 are
 > additionally **live-proven in prod** (inbound apply→duplicate, recordCount=1). FR-1/2 + NFR-7
-> stay `verified` (v0.1.0 prod smoke). FR-10 (full live round-trip) stays `built` — every
-> component is verified, but its end-to-end acceptance needs the live outbound callout, gated on
-> the FRS_Service Named Credential + Connected App/JWT (see `../release/round-trip-test-plan-v0.2.0.md`).
+> stay `verified` (v0.1.0 prod smoke).
+
+> **Status at FR-10 close (2026-06-29):** FR-10 → **`verified`**. The live outbound round-trip was
+> proven in scratch org `frs-fr10` (prodtest couldn't host `frs-platform` — class-name collision with
+> the banking-app package's `CalloutService`; both are namespace-less). Path exercised end-to-end:
+> `CalloutService` → `FRS_Service` Named Credential → External Credential `FRS_Service_Cred` (OAuth 2.0
+> Client-Credentials, secret entered via Setup UI — the one non-metadata step) → token fetch →
+> authenticated `POST /v1/notifications` → mock **202 accepted** (`receiptId` returned, **correlationId
+> echoed**). Dead-letter path also incidentally proven (the pre-credential attempts exhausted retries →
+> `DL-0000000000`). **All 23 FR/NFR rows now `verified` except FR-12/NFR-6 (Phase 9 monitoring),
+> NFR-9 (CI gates), and the always-`designed` security/compat rows.**
 
 ## Functional requirements
 
@@ -42,7 +50,7 @@ Rules (same as todo-app):
 | FR-7 | Dead-letter + replay | ADR-003, sequence-diagrams.md §3 | `Integration_DeadLetter__c`, `ReplayService`, `CalloutFinalizer` | `ReplayServiceTest.replay_resendsAndMarksReplayed`, `CalloutQueueableTest.terminalFailure_deadLettersImmediately` | verified |
 | FR-8 | Accept inbound status callback | ADR-002, integration-contract.md §4, sequence-diagrams.md §4, security-trust-boundary.md | `FrsStatusResource` (Apex REST), Connected App + integration user | `FrsStatusResourceTest.firstMessage_isApplied / missingRequiredField_is400` | verified |
 | FR-9 | Apply inbound idempotently | ADR-003, sequence-diagrams.md §5, integration-contract.md §4.2 | `IdempotencyGuard`, `Integration_Message__c` (unique key) | `IdempotencyGuardTest.duplicateKey_isNoOp`, `FrsStatusResourceTest.replaySameKey_isDuplicateNoOp` | verified |
-| FR-10 | Trace round-trip by correlation id | integration-architecture.md §5, sequence-diagrams.md §7 | `correlationId` on all log events | round-trip-test-plan-v0.2.0.md §C (live, gated) | built |
+| FR-10 | Trace round-trip by correlation id | integration-architecture.md §5, sequence-diagrams.md §7 | `correlationId` on all log events | round-trip-test-plan-v0.2.0.md §C (live, **verified 2026-06-29** in scratch `frs-fr10`: outbound callout → 202 accepted, correlation echoed) | verified |
 | FR-11 | Governor-safe under bulk | sequence-diagrams.md §1 (one enqueue/txn), ADR-002 | `CalloutService.chunk` + `CalloutQueueable` (≤100/txn, one job/chunk) | `CalloutQueueableTest.chunk_splitsAtGovernorSafeBoundary / bulk_200_staysGovernorSafe` | verified |
 | FR-12 | View integration health *(Phase 9)* | — (monitoring surface, Phase 9) | `lwc/integrationHealth`, reports | e2e + manual UAT | planned |
 

@@ -197,11 +197,22 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
               LogEventHandler (@SuppressWarnings CRUD quarantine marker) persists Log__c. Logger.cls (inherited sharing;
               log/error/warn/info + Exception overload + category). LoggerTest: log_writesDurableRecord, survivesRollback
               (NFR-7), severityHelpers - via Test.getEventBus().deliver().
-    [~] 5.2 - One outbound callout to Vercel /health via Named Cred (HttpCalloutMock unit test + real scratch-org call)
+    [x] 5.2 - One outbound callout to Vercel via Named Cred (HttpCalloutMock unit test + real scratch-org call)
               2026-06-17 SOURCE AUTHORED: CalloutService.ping() GETs callout:FRS_Service/v1/health (no hard-coded URL),
               logs outcome. CalloutServiceTest uses HttpCalloutMock (200 + 500 cases, asserts endpoint = Named Cred path).
-              REAL scratch-org call = execution (needs FRS_Service Named/External Credential set up per
-              docs/devops/named-credential-setup.md, which needs the live Vercel URL w/ protection OFF).
+              *** 2026-06-29 LIVE-VERIFIED (FR-10) in scratch frs-fr10 ***: the Phase-6 outbound path
+              CalloutService.sendAsync -> FRS_Service Named Cred -> External Credential FRS_Service_Cred (OAuth 2.0
+              Client-Credentials) -> live token fetch from frs-mock-service.vercel.app/oauth/token -> authenticated
+              POST /v1/notifications -> 202 accepted, receiptId returned, correlationId echoed (synchronous diag proof +
+              async canonical smoke, 0 new dead letters). Dead-letter path also proven (pre-credential retries exhausted
+              -> DL-0000000000). KEY FINDING: prodtest cannot host frs-platform - class-name collision with banking-app's
+              frs-platform-core (both namespace-less, both define CalloutService) -> used a dedicated scratch org instead.
+              ARTIFACTS PROMOTED TO SOURCE: externalCredentials/FRS_Service_Cred + namedCredentials/FRS_Service (secret-free,
+              retrieved from the working org) + permissionsets/FRS_Outbound_Callout (External Credential Principal Access).
+              The client_id/secret is the only non-metadata step (entered via Setup UI - Salesforce stores it write-only;
+              both metadata deploy and ConnectApi.NamedCredentials.createCredential reject the obvious field names).
+              Also fixed a latent contract-drift bug in scripts/apex/round-trip-smoke.apex (outbound payload used
+              'salesforceRecordId'; mock allowlist is {externalRef,recordId,status} -> changed to 'recordId').
     [x] 5.3 - Vercel /health answers + logs inbound hit
               2026-06-17 DONE in 4.4 - mock GET /v1/health returns {status:ok,...}; verified in local smoke (8/8).
     [~] 5.4 - Package version 0.1.0.1 via CI, installed in prod; tag v0.1.0 + CHANGELOG.md
