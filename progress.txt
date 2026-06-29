@@ -10,6 +10,15 @@ Reuses: todo-app orgs (DevHub orgfarm-60a172912c / prod orgfarm-5b96907065), the
 Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count before pushing.
             Package-version builds are a SEPARATE 6/day limit. API pinned 67.0 (Summer '26).
 
+*** REPO MOVED TO GITHUB 2026-06-29 *** (escape GitLab shared-runner CI-minute quota that blocked MR !6)
+    origin = https://github.com/andysolomon/sf-platform-enablement (PUBLIC; Actions minutes unlimited for public repos).
+    GitLab remote kept locally as `gitlab` (read-only archive). All branches + tags (v0.1.0, v0.2.0) pushed to GitHub.
+    FR-10 verification change merged as GitHub PR #1 (merge commit 7abe238) -> main now carries 353a11a. GitLab MR !6
+    superseded (note posted pointing to PR #1; left open as a breadcrumb - close blocked, harmless).
+    CI NOT yet ported: the GitLab pipeline was a CONSUMER of sf-todo's reusable template (NFR-10 proof). Porting the
+    SF release pipeline to GitHub Actions (reusable workflow + recreate SFDX_AUTH_URL_DEVHUB/PROD secrets) is the next
+    DevOps task. main intentionally left WITHOUT required status checks so merges aren't re-blocked until CI lands.
+
 [x] 1.0 - Phase 1 - Governance and Platform Charter  *** PHASE 1 COMPLETE 2026-06-17 (back-filled after Phase 2) ***
     [x] 1.1 - docs/governance/charter.md (platform-as-product; roles incl. Consumer App Lead + InfoSec)
               2026-06-17 DONE. Reuses todo-app hats/SoD/ALM-stages; ADDS Consumer App Lead hat (signs off public-API
