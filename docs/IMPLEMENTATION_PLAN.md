@@ -290,7 +290,7 @@ goes red then green (gates bite).
 
 **Deliverables:**
 - Base package v0.1.0: a minimal `Logger.log(String)` public API writing one
-  `Platform_Log__e` Platform Event (or `Log__c`), with a consumer test.
+  `Platform_LogEvent__e` Platform Event (or `Log__c`), with a consumer test.
 - One real **outbound callout** to the Vercel `/health` endpoint via Named Credential,
   proven with an `HttpCalloutMock` unit test **and** a real call in a scratch org.
 - Vercel service answering `/health` and logging the inbound hit.

@@ -24,17 +24,17 @@ log written right before an unhandled exception would vanish exactly when it mat
 
 **Platform-Event-backed logging** (the Nebula-Logger pattern, simplified):
 
-- `Logger.log()/error()/warn()` publishes a **`Log__e` Platform Event** with **Publish
+- `Logger.log()/error()/warn()` publishes a **`LogEvent__e` Platform Event** with **Publish
   Behavior = "Publish Immediately."** Immediate publish is **not** tied to the transaction's
   commit, so the event is delivered even if the publishing transaction later rolls back
   (satisfies NFR-7 / FR-2).
-- A platform **subscriber trigger on `Log__e`** persists each event to a queryable `Log__c`
+- A platform **subscriber trigger on `LogEvent__e`** persists each event to a queryable `Log__c`
   record (for the monitoring surface, FR-12, and audit). The subscriber runs in its own
   transaction, so its DML is independent of the original (rolled-back) one.
 - Each log carries: `correlationId`, `severity`, `source`, `message`, `category`
   (e.g. integration/outbound, integration/inbound, retry, dead-letter), and a truncated/
   redacted payload reference (NFR-2 — never secrets).
-- The public API (`Logger`) **hides the event entirely** — consumers never touch `Log__e`
+- The public API (`Logger`) **hides the event entirely** — consumers never touch `LogEvent__e`
   (api-governance public-surface rule); the storage mechanism can change without a major bump.
 
 ### Options considered
@@ -42,8 +42,8 @@ log written right before an unhandled exception would vanish exactly when it mat
 | Option | Survives rollback? | For | Against |
 |---|---|---|---|
 | DML to `Log__c` directly | **No** | Simplest, immediately queryable | Loses the logs written before a failure — fails NFR-7 |
-| `Log__e` with default (after-commit) publish | **No** for a rolled-back txn | Decoupled | After-commit publish is suppressed when the transaction rolls back — fails NFR-7 |
-| **`Log__e` with Publish-Immediately + subscriber → `Log__c` (chosen)** | **Yes** | Survives rollback; decoupled; queryable via the subscriber; one bus reused for domain events (ADR-002) | Eventual (not synchronous) persistence; PE daily publish limits on DE (documented) |
+| `LogEvent__e` with default (after-commit) publish | **No** for a rolled-back txn | Decoupled | After-commit publish is suppressed when the transaction rolls back — fails NFR-7 |
+| **`LogEvent__e` with Publish-Immediately + subscriber → `Log__c` (chosen)** | **Yes** | Survives rollback; decoupled; queryable via the subscriber; one bus reused for domain events (ADR-002) | Eventual (not synchronous) persistence; PE daily publish limits on DE (documented) |
 | External logging service (e.g. callout per log) | Yes | Off-platform durability | A callout per log is absurd cost + governor pressure; ironic for a logging framework |
 
 ## Consequences

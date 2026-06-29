@@ -22,7 +22,7 @@ graph TB
         SUB["Domain-event subscriber → Queueable"]
         CS["CalloutService (Named Credential)"]
         IN["FrsStatusResource (Apex REST /frs/v1/status)"]
-        LOG["Logger → Log__e (publish immediately) → Log__c"]
+        LOG["Logger → LogEvent__e (publish immediately) → Log__c"]
         DL["Integration_DeadLetter__c + ReplayService"]
         IM["Integration_Message__c (unique idempotency key)"]
     end
@@ -91,6 +91,6 @@ abstraction for application developers" the JD asks for, and why the Named Crede
 ## 5. Observability spine
 
 Every box that touches an integration step calls `Logger` with a shared **correlation id**
-(ADR-004). Because `Log__e` publishes immediately, the chain survives a rollback, and querying
+(ADR-004). Because `LogEvent__e` publishes immediately, the chain survives a rollback, and querying
 `Log__c` by correlation id reconstructs the full round-trip (FR-10, NFR-6) — the data behind
 the Phase 9 monitoring surface. Sequences for each path are in `sequence-diagrams.md`.

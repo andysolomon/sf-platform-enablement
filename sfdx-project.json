@@ -1,17 +1,19 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v0.1",
-      "versionNumber": "1.0.0.NEXT",
+      "versionName": "v0.2",
+      "versionNumber": "0.2.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "frs-platform",
-      "versionDescription": "Walking skeleton: Logger -> Log__e, CalloutService /health callout, inbound FrsStatusResource"
+      "versionDescription": "Core components: outbound resilience (CalloutService.sendAsync, retry/backoff/dead-letter, bulk), inbound idempotency (FrsStatusResource + IdempotencyGuard), EventPublisher"
     }
   ],
   "name": "frs-platform",
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "66.0",
-  "packageAliases": {}
+  "packageAliases": {
+    "frs-platform": "0HogK00000038c9SAA"
+  }
 }

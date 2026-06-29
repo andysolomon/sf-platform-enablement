@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>FRS Outbound Callout</label>
+    <description>Grants External Credential Principal Access to FRS_Service_Cred so the running user can perform the outbound SF -> FRS callout (FR-10 / ADR-005). Verification artifact.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>FRS_Service_Cred-FRS_CLIENT</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+</PermissionSet>
