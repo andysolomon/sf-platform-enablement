@@ -1,0 +1,267 @@
+name: Salesforce CI/CD
+
+# Port of the GitLab pipeline (.gitlab-ci.yml, which CONSUMED sf-todo's reusable
+# ci-templates/salesforce-pipeline.yml) to GitHub Actions. Moved off GitLab to escape the
+# shared-runner CI-minute quota; public repo → unlimited Actions minutes.
+#
+# Pipeline shape (mirrors the GitLab stages validate→test→package→test-release→release):
+#   • Pull request → main : the GATE — scan (Code Analyzer, High+) → lwc-test → apex-test
+#     (fresh scratch org, deploy, permset, RunLocalTests, coverage ≥85%).
+#   • Push to main (merge): the GATE again, then RELEASE — package (frs-platform 2GP version)
+#     → staging-install (fresh scratch) → prod-install (PROMOTE → install, gated on the
+#     `production` Environment's manual approval = the charter Release-Manager SoD click).
+#
+# Lessons carried from the GitLab build (interview-grade — do not regress):
+#   • node:20 — sf CLI 2.137 hangs on node:22's "unsettled top-level await" (login never
+#     persists). This was the NFR-10 coupling that turned the v0.1.0 pipeline red; pinned here.
+#   • login via --sfdx-url-file, NOT the stdin pipe (the pipe races the CLI's top-level await).
+#   • beta package versions CANNOT install into a production org → promote (→Released) first.
+#   • org-burning jobs are CODE-GATED (paths-filter) so docs-only PRs don't burn scratch orgs —
+#     scratch/CI budget is finite (and was the original motivation to leave GitLab).
+#
+# Secrets (repo → Settings → Secrets and variables → Actions):
+#   SFDX_AUTH_URL_DEVHUB_B64 — base64 of the Dev Hub's `force://` auth URL (test + build + promote).
+#   SFDX_AUTH_URL_PROD_B64   — base64 of prodtest's `force://` auth URL (install target).
+#   Set via `gh secret set NAME < file`. The `production` Environment carries the manual approval.
+#
+# NOT ported yet (was placeholders in GitLab too): the `contract-test` job (real HttpCalloutMock +
+# deployed-mock assertions). Unit tests already cover the mocked path; live contract is a follow-up.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded PR runs (saves scratch orgs); let main/release runs finish so a
+# half-built package version isn't orphaned mid-build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# Force bash for every run step. Inside the node:20 container /bin/sh is dash, which rejects
+# `set -o pipefail` (a bashism the scripts rely on). Debian-based node:20 ships bash.
+defaults:
+  run:
+    shell: bash
+
+env:
+  SF_CLI_VERSION: "2.137.7"
+  SF_PACKAGE: "frs-platform"
+  # Proven-green in the GitLab pipeline (97% coverage) with FRS_Integration assigned.
+  # FRS_Operations / FRS_Outbound_Callout also exist in source but aren't needed for the
+  # mocked test run (operator + external-credential-principal grants).
+  SF_PERMSET: "FRS_Integration"
+  SF_SCRATCH_DEF: "config/project-scratch-def.json"
+  SF_SEED_SCRIPT: "scripts/apex/seed-integration.apex"
+  SF_COVERAGE_MIN: "85"
+
+jobs:
+  # ---- change detection ------------------------------------------------------------------
+  # Equivalent of the GitLab template's `*sf-code-paths`. Org-burning jobs gate on `sf`;
+  # scan + lwc-test always run (cheap, and they anchor the required status checks so a
+  # docs-only PR still gets a green pipeline). NOTE for branch protection: mark scan +
+  # lwc-test as the required checks — NOT apex-test/package/etc., which are skipped on
+  # docs-only changes (a skipped *required* check blocks the PR in GitHub).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      sf: ${{ steps.filter.outputs.sf }}     # gate for apex-test (also fires on workflow edits, so a CI change is tested)
+      src: ${{ steps.filter.outputs.src }}   # gate for RELEASE jobs — real package source only (NOT .github/workflows),
+                                             # so a workflow-only merge to main never cuts a release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            sf:
+              - 'force-app/**'
+              - 'config/**'
+              - 'sfdx-project.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.forceignore'
+              - '.github/workflows/**'
+            src:
+              - 'force-app/**'
+              - 'config/**'
+              - 'sfdx-project.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.forceignore'
+
+  # ---- GATE -------------------------------------------------------------------------------
+  scan:
+    runs-on: ubuntu-latest
+    container: node:20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Java (PMD/CPD engines), sf CLI + code-analyzer
+        run: |
+          # node:20 has no JRE; Code Analyzer's pmd/cpd engines need Java 11+.
+          command -v java >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq default-jre-headless; }
+          command -v sf >/dev/null 2>&1 || npm install --global @salesforce/cli@${SF_CLI_VERSION}
+          sf plugins inspect code-analyzer >/dev/null 2>&1 || sf plugins install code-analyzer
+      - name: Code Analyzer (fail on High+)
+        run: |
+          set -eo pipefail
+          sf code-analyzer run --workspace force-app --rule-selector Recommended --severity-threshold 2 --output-file scan-results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-results
+          path: scan-results.json
+
+  lwc-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit   # sfdx-lwc-jest --passWithNoTests (no LWC yet → cheap green anchor)
+
+  apex-test:
+    runs-on: ubuntu-latest
+    container: node:20
+    needs: [changes, scan, lwc-test]
+    if: needs.changes.outputs.sf == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install sf CLI
+        run: command -v sf >/dev/null 2>&1 || npm install --global @salesforce/cli@${SF_CLI_VERSION}
+      - name: Authenticate Dev Hub
+        env:
+          SFDX_AUTH_URL_DEVHUB_B64: ${{ secrets.SFDX_AUTH_URL_DEVHUB_B64 }}
+        run: |
+          echo "$SFDX_AUTH_URL_DEVHUB_B64" | base64 -d > /tmp/devhub-auth.txt
+          sf org login sfdx-url --sfdx-url-file /tmp/devhub-auth.txt --alias devhub --set-default-dev-hub
+          rm -f /tmp/devhub-auth.txt
+      - name: Scratch org → deploy → permset → seed → tests (coverage gate)
+        run: |
+          set -eo pipefail
+          sf org create scratch --definition-file "$SF_SCRATCH_DEF" --alias ci-$GITHUB_RUN_ID --duration-days 1 --set-default --wait 15
+          sf project deploy start --target-org ci-$GITHUB_RUN_ID --wait 20
+          sf org assign permset --name "$SF_PERMSET" --target-org ci-$GITHUB_RUN_ID
+          if [ -n "$SF_SEED_SCRIPT" ] && [ -f "$SF_SEED_SCRIPT" ]; then sf apex run --file "$SF_SEED_SCRIPT" --target-org ci-$GITHUB_RUN_ID; fi
+          sf apex run test --target-org ci-$GITHUB_RUN_ID --test-level RunLocalTests --code-coverage --result-format human --wait 20 | tee apex-test.log
+          COVERAGE=$(grep -Eo 'Org Wide Coverage *[0-9]+' apex-test.log | grep -Eo '[0-9]+' || echo 0)
+          echo "Org-wide coverage: ${COVERAGE}%"
+          test "$COVERAGE" -ge "$SF_COVERAGE_MIN"
+      - name: Delete scratch org
+        if: always()
+        run: sf org delete scratch --target-org ci-$GITHUB_RUN_ID --no-prompt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apex-test-log
+          path: apex-test.log
+
+  # ---- RELEASE (push to main only, and only when SF source changed) -----------------------
+  package:
+    runs-on: ubuntu-latest
+    container: node:20
+    needs: [changes, apex-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.src == 'true'
+    outputs:
+      spv: ${{ steps.build.outputs.spv }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install sf CLI + jq
+        run: |
+          command -v sf >/dev/null 2>&1 || npm install --global @salesforce/cli@${SF_CLI_VERSION}
+          command -v jq >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq jq; }
+      - name: Authenticate Dev Hub
+        env:
+          SFDX_AUTH_URL_DEVHUB_B64: ${{ secrets.SFDX_AUTH_URL_DEVHUB_B64 }}
+        run: |
+          echo "$SFDX_AUTH_URL_DEVHUB_B64" | base64 -d > /tmp/devhub-auth.txt
+          sf org login sfdx-url --sfdx-url-file /tmp/devhub-auth.txt --alias devhub --set-default-dev-hub
+          rm -f /tmp/devhub-auth.txt
+      - name: Build package version
+        id: build
+        run: |
+          set -eo pipefail
+          sf package version create --package "$SF_PACKAGE" --installation-key-bypass --code-coverage --wait 40 --json | tee version-create.json
+          SPV=$(jq -r '.result.SubscriberPackageVersionId' version-create.json)
+          echo "spv=$SPV" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: version-create
+          path: version-create.json
+
+  staging-install:
+    runs-on: ubuntu-latest
+    container: node:20
+    needs: [package]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install sf CLI
+        run: command -v sf >/dev/null 2>&1 || npm install --global @salesforce/cli@${SF_CLI_VERSION}
+      - name: Authenticate Dev Hub
+        env:
+          SFDX_AUTH_URL_DEVHUB_B64: ${{ secrets.SFDX_AUTH_URL_DEVHUB_B64 }}
+        run: |
+          echo "$SFDX_AUTH_URL_DEVHUB_B64" | base64 -d > /tmp/devhub-auth.txt
+          sf org login sfdx-url --sfdx-url-file /tmp/devhub-auth.txt --alias devhub --set-default-dev-hub
+          rm -f /tmp/devhub-auth.txt
+      - name: Fresh scratch → install version → permset → seed
+        env:
+          SPV: ${{ needs.package.outputs.spv }}
+        run: |
+          set -eo pipefail
+          sf org create scratch --definition-file "$SF_SCRATCH_DEF" --alias stg-$GITHUB_RUN_ID --duration-days 1 --set-default --wait 15
+          sf package install --package "$SPV" --target-org stg-$GITHUB_RUN_ID --wait 20 --no-prompt
+          sf org assign permset --name "$SF_PERMSET" --target-org stg-$GITHUB_RUN_ID
+          if [ -n "$SF_SEED_SCRIPT" ] && [ -f "$SF_SEED_SCRIPT" ]; then sf apex run --file "$SF_SEED_SCRIPT" --target-org stg-$GITHUB_RUN_ID; fi
+          echo "staging install OK ($SPV)."
+      - name: Delete scratch org
+        if: always()
+        run: sf org delete scratch --target-org stg-$GITHUB_RUN_ID --no-prompt || true
+
+  prod-install:
+    runs-on: ubuntu-latest
+    container: node:20
+    needs: [package, staging-install]
+    environment: production   # manual gate: add a required reviewer to this Environment in repo settings
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install sf CLI
+        run: command -v sf >/dev/null 2>&1 || npm install --global @salesforce/cli@${SF_CLI_VERSION}
+      # Promote (→Released) is done against the Dev Hub that OWNS the package — beta versions
+      # cannot install into a production org. Placed AFTER the `production` approval so we only
+      # promote (irreversible) what we have decided to ship.
+      - name: Authenticate Dev Hub (for promote)
+        env:
+          SFDX_AUTH_URL_DEVHUB_B64: ${{ secrets.SFDX_AUTH_URL_DEVHUB_B64 }}
+        run: |
+          echo "$SFDX_AUTH_URL_DEVHUB_B64" | base64 -d > /tmp/devhub-auth.txt
+          sf org login sfdx-url --sfdx-url-file /tmp/devhub-auth.txt --alias devhub --set-default-dev-hub
+          rm -f /tmp/devhub-auth.txt
+      - name: Promote version to Released
+        env:
+          SPV: ${{ needs.package.outputs.spv }}
+        run: sf package version promote --package "$SPV" --target-dev-hub devhub --no-prompt
+      - name: Authenticate prod
+        env:
+          SFDX_AUTH_URL_PROD_B64: ${{ secrets.SFDX_AUTH_URL_PROD_B64 }}
+        run: |
+          echo "$SFDX_AUTH_URL_PROD_B64" | base64 -d > /tmp/prod-auth.txt
+          sf org login sfdx-url --sfdx-url-file /tmp/prod-auth.txt --alias prod
+          rm -f /tmp/prod-auth.txt
+      - name: Install version into prod
+        env:
+          SPV: ${{ needs.package.outputs.spv }}
+        run: |
+          set -eo pipefail
+          sf package install --package "$SPV" --target-org prod --wait 30 --no-prompt
+          echo "Post-install (manual, documented): the FRS_Service External Credential client_secret is"
+          echo "entered via Setup UI (write-only — not in metadata); then run scripts/apex/round-trip-smoke.apex."
+          echo "See docs/release/round-trip-test-plan-v0.2.0.md."
