@@ -15,9 +15,22 @@ Constraint: 6 scratch-org creates/day SHARED with any todo-app work - count befo
     GitLab remote kept locally as `gitlab` (read-only archive). All branches + tags (v0.1.0, v0.2.0) pushed to GitHub.
     FR-10 verification change merged as GitHub PR #1 (merge commit 7abe238) -> main now carries 353a11a. GitLab MR !6
     superseded (note posted pointing to PR #1; left open as a breadcrumb - close blocked, harmless).
-    CI NOT yet ported: the GitLab pipeline was a CONSUMER of sf-todo's reusable template (NFR-10 proof). Porting the
-    SF release pipeline to GitHub Actions (reusable workflow + recreate SFDX_AUTH_URL_DEVHUB/PROD secrets) is the next
-    DevOps task. main intentionally left WITHOUT required status checks so merges aren't re-blocked until CI lands.
+    CI PORTED TO GITHUB ACTIONS 2026-06-30 (.github/workflows/salesforce.yml). Single-package (frs-platform) port of
+    the GitLab pipeline (which consumed sf-todo's reusable salesforce-pipeline.yml). Modeled on banking-app's local
+    Actions workflow; carries the same lessons: node:20 (sf CLI hangs on node:22), --sfdx-url-file not stdin,
+    promote-beta->Released before prod install, code-gated org jobs (dorny/paths-filter) so docs-only PRs don't burn
+    scratch. Shape: PR->main GATE (scan -> lwc-test -> apex-test scratch+coverage>=85%); push->main adds RELEASE
+    (package -> staging-install -> prod-install behind the `production` Environment manual approval = Release-Manager SoD).
+    First run: scan + lwc-test GREEN, apex-test fails ONLY at Dev Hub auth (secret not yet set), release jobs correctly
+    skipped on a CI-only change. Branch protection RE-ENABLED on main: required checks scan + lwc-test (cheap, always
+    run; NOT apex-test which skips on docs-only), strict, PR-only (0 approvals so Andy self-merges), admins not enforced.
+    SECRETS: SFDX_AUTH_URL_DEVHUB_B64 = STILL UNSET (blocker) — local DevHub auth has NO refresh token (sf also redacts
+    sfdxAuthUrl now), and copying the known-good value from the GitLab CI var was classifier-blocked (reuse-of-CI-secret).
+    Andy must set it himself, e.g.:
+      glab variable get SFDX_AUTH_URL_DEVHUB_B64 -R andysolomon/sf-platform-enablement | gh secret set SFDX_AUTH_URL_DEVHUB_B64 -R andysolomon/sf-platform-enablement
+    SFDX_AUTH_URL_PROD_B64 = DEFERRED: prodtest is contaminated (banking-app CalloutService collision -> frs-platform
+    can't install there); prod-install needs a dedicated clean prod org. The `production` env (reviewer=andysolomon)
+    exists so the gate is ready when that org is.
 
 [x] 1.0 - Phase 1 - Governance and Platform Charter  *** PHASE 1 COMPLETE 2026-06-17 (back-filled after Phase 2) ***
     [x] 1.1 - docs/governance/charter.md (platform-as-product; roles incl. Consumer App Lead + InfoSec)
